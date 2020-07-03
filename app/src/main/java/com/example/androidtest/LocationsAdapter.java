@@ -1,21 +1,18 @@
 package com.example.androidtest;
-
-
-
 import android.content.Context;
-
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-
 import java.util.ArrayList;
 
 
 public class LocationsAdapter extends RecyclerView.Adapter<LocationsAdapter.MyViewHolder> {
-
+    /**
+     * Custom recyclerview adapter
+     */
     public static class MyViewHolder extends RecyclerView.ViewHolder {
         public TextView location_text;
 
@@ -25,10 +22,10 @@ public class LocationsAdapter extends RecyclerView.Adapter<LocationsAdapter.MyVi
         }
     }
     Context c;
-    ArrayList<String> locations;
+    ArrayList<Locations> locations;
 
 
-    public LocationsAdapter(Context c, ArrayList<String> locations) {
+    public LocationsAdapter(Context c, ArrayList<Locations> locations) {
         this.c = c;
         this.locations = locations;
     }
@@ -42,7 +39,7 @@ public class LocationsAdapter extends RecyclerView.Adapter<LocationsAdapter.MyVi
 
     @Override
     public void onBindViewHolder(MyViewHolder holder, int position) {
-        holder.location_text.setText(locations.get(position));
+        holder.location_text.setText(locations.get(position).toString());
 
 
     }

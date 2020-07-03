@@ -6,6 +6,9 @@ import io.realm.RealmObject;
 import io.realm.annotations.PrimaryKey;
 
 public class Locations extends RealmObject {
+    /**
+     * realm model object
+     */
     @PrimaryKey
     private int id;
     private String lat;
@@ -28,6 +31,7 @@ public class Locations extends RealmObject {
     public String getTime(){
         return this.timestamp;
     }
+    public int getId(){return this.id;}
 
     @NonNull
     @Override

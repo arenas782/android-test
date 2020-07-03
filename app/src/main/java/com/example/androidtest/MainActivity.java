@@ -14,6 +14,8 @@ import android.os.Bundle;
 
 import android.provider.Settings;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,9 +38,7 @@ import com.karumi.dexter.listener.PermissionDeniedResponse;
 import com.karumi.dexter.listener.PermissionGrantedResponse;
 import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.single.PermissionListener;
-
 import java.util.ArrayList;
-
 import io.realm.Realm;
 import io.realm.RealmResults;
 import io.realm.Sort;
@@ -50,66 +50,65 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
         return instance;
     }
 
-
     TextView text_location;
+    RecyclerView recyclerView;
 
-     RecyclerView recyclerView;
-
-    private RecyclerView.LayoutManager layoutManager;
-    SwipeRefreshLayout swipeRefreshLayout;
-
-    ArrayList<String> locations;
+    private SwipeRefreshLayout swipeRefreshLayout;
     LocationsAdapter adapter;
+    ArrayList<Locations> locations;
 
 
+    private LocationRequest locationRequest;
+    private Realm realm;
 
-    LocationRequest locationRequest;
-    FusedLocationProviderClient fusedLocationProviderClient;
-
-    Realm realm;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         text_location=(TextView)findViewById(R.id.text_location);
+        Button clear = (Button) findViewById(R.id.clear);
+        swipeRefreshLayout=(SwipeRefreshLayout)findViewById(R.id.swipe_layout);
+        swipeRefreshLayout.setOnRefreshListener(this);
+        recyclerView = (RecyclerView) findViewById(R.id.my_recycler_view);
+        recyclerView.setHasFixedSize(true);
+        RecyclerView.LayoutManager layoutManager = new LinearLayoutManager(this);
+        recyclerView.setLayoutManager(layoutManager);
+
+
         instance = this;
         Realm.init(this);
         realm = Realm.getDefaultInstance();
+
+
         locations=fillLocations();
-
-        swipeRefreshLayout=(SwipeRefreshLayout)findViewById(R.id.swipe_layout);
-        swipeRefreshLayout.setOnRefreshListener(this);
-
-
-        recyclerView = (RecyclerView) findViewById(R.id.my_recycler_view);
-        recyclerView.setHasFixedSize(true);
-        layoutManager = new LinearLayoutManager(this);
-        recyclerView.setLayoutManager(layoutManager);
-
         adapter=new LocationsAdapter(this,locations);
         recyclerView.setAdapter(adapter);
 
 
-        BroadcastReceiver receiver=new BroadcastReceiver() {
+
+
+        clear.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onReceive(Context context, Intent intent) {
-                String action = intent.getAction();
-                Log.d("Action",action);
-                Bundle b=intent.getExtras();
-
+            public void onClick(View v) {
+                clearAllLocations();
             }
-        };
+        });
 
 
 
 
-        final RealmResults<Locations> records = realm.where(Locations.class).findAll();
-        records.size(); // => 0 because no dogs have been added to the Realm yet
-        Log.d("Main","Total records: "+records.size());
-        //mAdapter = new RVAdapter(myDataset);
-        //recyclerView.setAdapter(mAdapter);
+        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(swipeCallback());
+        itemTouchHelper.attachToRecyclerView(recyclerView);
 
+        checkPermissions();
+
+
+
+
+    }
+
+    public void checkPermissions(){
         Dexter.withActivity(this).withPermission(Manifest.permission.ACCESS_FINE_LOCATION).withListener(
                 new PermissionListener() {
                     @Override
@@ -128,14 +127,72 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
                     }
                 }
         ).check();
+    }
 
+
+    public ItemTouchHelper.SimpleCallback swipeCallback(){
+        ItemTouchHelper.SimpleCallback simpleItemTouchCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT | ItemTouchHelper.DOWN | ItemTouchHelper.UP) {
+
+            @Override
+            public boolean onMove(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, RecyclerView.ViewHolder target) {
+                Toast.makeText(MainActivity.this, "on Move", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+
+            @Override
+            public void onSwiped(RecyclerView.ViewHolder viewHolder, int swipeDir) {
+                if(locations.size()>0){
+                    final int position = viewHolder.getAdapterPosition();
+
+                    final int id=locations.get(position).getId();
+
+                    Toast.makeText(MainActivity.this, "Deleted "+id, Toast.LENGTH_SHORT).show();
+                    //Remove swiped item from list and notify the RecyclerView
+
+                    //remove from database
+                    realm.executeTransaction(new Realm.Transaction() {
+                        @Override
+                        public void execute(Realm realm) {
+                            RealmResults<Locations> result = realm.where(Locations.class).equalTo("id",id).findAll();
+                            result.deleteAllFromRealm();
+                        }
+                    });
+                    locations.clear();
+                    locations.addAll(fillLocations());
+                    adapter=new LocationsAdapter(MainActivity.this,locations);
+                    recyclerView.setAdapter(adapter);
+                }
+
+            }
+        };
+        return simpleItemTouchCallback;
+    }
+
+
+    private void clearAllLocations() {
+        if(locations.size()>0){
+            locations.clear();
+            realm.executeTransaction(new Realm.Transaction() {
+                @Override
+                public void execute(Realm realm) {
+                    RealmResults<Locations> result = realm.where(Locations.class).findAll();
+                    result.deleteAllFromRealm();
+                }
+            });
+            adapter=new LocationsAdapter(MainActivity.this,locations);
+            adapter.notifyDataSetChanged();
+            recyclerView.setAdapter(adapter);
+            text_location.setText("No records.");
+            Toast.makeText(this, "Cleaned", Toast.LENGTH_SHORT).show();
+        }
+        else
+            Toast.makeText(this, "Nothing to clean", Toast.LENGTH_SHORT).show();
     }
 
     private void updateLocation() {
         buildLocationRequest();
-        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+        FusedLocationProviderClient fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            
             return;
         }
         fusedLocationProviderClient.requestLocationUpdates(locationRequest, getPendintIntent());
@@ -152,12 +209,10 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
         locationRequest=new LocationRequest();
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         locationRequest.setInterval(60000); //every minute
-        //locationRequest.setFastestInterval(30000); //every 30 seconds
+        locationRequest.setFastestInterval(30000); //every 30 seconds
         locationRequest.setSmallestDisplacement(10f);
         LocationSettingsRequest.Builder builder=new LocationSettingsRequest.Builder().addLocationRequest(locationRequest);
         builder.setAlwaysShow(true);
-
-
     }
 
 
@@ -206,25 +261,11 @@ public class MainActivity extends AppCompatActivity implements SwipeRefreshLayou
     }
 
 
-    @Override
-    public void onResume() {
-        // ... calling super.onResume(), etc...
-        // Perform the Realm database query
-        super.onResume();
-        locations=fillLocations();
-        adapter.notifyDataSetChanged();
-    }
 
-    public ArrayList<String> fillLocations(){
-        ArrayList<String> locations=new ArrayList<>();
+
+    public ArrayList<Locations> fillLocations(){
         RealmResults<Locations> results=realm.where(Locations.class).sort("id", Sort.DESCENDING).findAll();
-
-        for(Locations loc:results)
-        {
-            locations.add(loc.toString());
-        }
-
-        return locations;
+        return new ArrayList<>(results);
     }
 
     @Override
